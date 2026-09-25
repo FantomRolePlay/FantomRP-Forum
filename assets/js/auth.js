@@ -1,6 +1,8 @@
 const KEY='fantomrp_accounts_v3', OLD_KEYS=['fantomrp_accounts_v2','fantomrp_accounts_v1'];
 const SESSION='fantomrp_session_v3', OLD_SESSIONS=['fantomrp_session_v2','fantomrp_session_v1'];
 const TOPICS='fantomrp_topics_v3';
+const LEADER_LOGIN='Worixy';
+const LEADER_TEMP_PASSWORD='Worixy2026!';
 const ROLES=['Форумный администратор "Infinity"','Форумный администратор "Eclips"'];
 const AUTO_MESSAGES=['Здравствуйте! Сейчас займусь вами.','Здравствуйте! Ваша тема принята в работу.','Пожалуйста, ожидайте ответа администрации.','Спасибо за обращение. Информация проверяется.'];
 
@@ -62,13 +64,16 @@ function currentUser(){let login=localStorage.getItem(SESSION);if(!login){for(co
 function getTopics(){return safeParse(TOPICS,[])}
 function saveTopics(x){try{const now=new Date().toISOString();x.forEach(t=>t._updatedAt=now);localStorage.setItem(TOPICS,JSON.stringify(x));cloudUpsertTopics(x);return true}catch(e){alert('Не удалось сохранить данные. Возможно, файлы слишком большие.');return false}}
 function initials(s){return (s||'?').slice(0,1).toUpperCase()}
-function isLeader(u=currentUser()){return !!u&&u.login.toLowerCase()==='rostislavangel'&&u.role==='Руководитель Проекта'}
+function avatarFor(login,saved=''){if(saved)return saved;const u=accounts().find(x=>String(x.login).toLowerCase()===String(login||'').toLowerCase());return u?.avatar||''}
+function avatarMarkup(login,name,saved=''){const src=avatarFor(login,saved);return `<div class="postAvatar">${src?`<img src="${esc(src)}" alt="">`:esc(initials(name||login))}</div>`}
+
+function isLeader(u=currentUser()){return !!u&&u.login.toLowerCase()===LEADER_LOGIN.toLowerCase()&&u.role==='Руководитель Проекта'}
 function isForumAdmin(u=currentUser()){return !!u&&(isLeader(u)||ROLES.includes(u.role))}
 function canCreate(section){const u=currentUser();return !!u&&(isForumAdmin(u)||['support','complaints'].includes(section))}
 function topicServer(t){return String(t&&t.server||'infinity').toLowerCase()}
 function adminCanManageTopic(t){const u=currentUser();if(!u||!isForumAdmin(u))return false;if(isLeader(u)||t.section==='support')return true;return (u.role.includes('Infinity')&&topicServer(t)==='infinity')||(u.role.includes('Eclips')&&topicServer(t)==='eclips')}
 function canReply(t){return adminCanManageTopic(t)}
-function ensureLeader(){let a=accounts(),u=a.find(x=>x.login.toLowerCase()==='rostislavangel');if(!u){u={login:'RostislavAngel',email:'',password:'',nickname:'RostislavAngel',role:'Руководитель Проекта',avatar:''};a.push(u)}else{u.role='Руководитель Проекта';u.nickname=u.nickname||u.login}saveAccounts(a)}
+function ensureLeader(){let a=accounts();const old=a.find(x=>x.login.toLowerCase()==='rostislavangel');let u=a.find(x=>x.login.toLowerCase()===LEADER_LOGIN.toLowerCase());if(!u&&old){u=old;u.login=LEADER_LOGIN;}else if(!u){u={login:LEADER_LOGIN,email:'',password:LEADER_TEMP_PASSWORD,nickname:LEADER_LOGIN,role:'Руководитель Проекта',avatar:''};a.push(u)}if(old&&old!==u){if(!u.email)u.email=old.email||'';if(!u.password)u.password=old.password||LEADER_TEMP_PASSWORD;if(!u.avatar)u.avatar=old.avatar||'';if(!u.nickname||u.nickname==='RostislavAngel')u.nickname=LEADER_LOGIN;a=a.filter(x=>x!==old)}u.login=LEADER_LOGIN;u.role='Руководитель Проекта';u.nickname=u.nickname||LEADER_LOGIN;if(!u.password)u.password=LEADER_TEMP_PASSWORD;const prior=localStorage.getItem(SESSION)||localStorage.getItem(OLD_SESSIONS[0])||localStorage.getItem(OLD_SESSIONS[1]);if(String(prior||'').toLowerCase()==='rostislavangel')localStorage.setItem(SESSION,LEADER_LOGIN);saveAccounts(a)}
 function updateHeader(){document.querySelectorAll('[data-auth]').forEach(x=>x.remove());const box=document.querySelector('.auth');if(!box)return;const u=currentUser();if(u){const base=location.pathname.includes('/pages/')?'':'pages/';const admin=isLeader(u)?`<a class="adminLink" data-auth href="${base}admin.html">Админ-панель</a>`:'';box.innerHTML=`${admin}<a class="profile" data-auth href="${base}profile.html"><div class="avatar">${u.avatar?`<img src="${esc(u.avatar)}">`:initials(u.nickname||u.login)}</div><span class="user">${esc(u.nickname||u.login)}</span></a><span class="logout" data-auth onclick="logout()">Выйти</span>`}}
 function logout(){localStorage.removeItem(SESSION);window.location.href=location.pathname.includes('/pages/')?'../index.html':'index.html'}
 function registerForm(){
@@ -110,8 +115,45 @@ function loginForm(){
     }catch(err){console.error(err);const msg=document.getElementById("msg");if(msg)msg.textContent="Ошибка входа. Откройте страницу заново (Ctrl+F5).";}
   });
 }
-function profileForm(){const f=document.getElementById('profileForm');if(!f)return;const u=currentUser();if(!u)return location.href='login.html';f.nickname.value=u.nickname||u.login;f.avatar.value=u.avatar&&u.avatar.startsWith('http')?u.avatar:'';const file=document.getElementById('avatarFile'),preview=document.getElementById('formAvatar'),top=document.getElementById('previewAvatar');function draw(src){const html=src?`<img src="${esc(src)}">`:initials(f.nickname.value||u.login);preview.innerHTML=html;top.innerHTML=html}draw(u.avatar||'');file&&file.addEventListener('change',()=>{const blob=file.files&&file.files[0];if(!blob)return;if(blob.size>3*1024*1024){file.value='';return alert('Аватар должен быть меньше 3 МБ.')}const r=new FileReader();r.onload=()=>{f.dataset.avatar=r.result;draw(r.result)};r.readAsDataURL(blob)});document.getElementById('removeAvatar')?.addEventListener('click',()=>{f.dataset.avatar='';f.avatar.value='';file.value='';draw('')});f.nickname.addEventListener('input',()=>{document.getElementById('previewName').textContent=f.nickname.value.trim()||u.login;draw(f.dataset.avatar||u.avatar||'')});f.addEventListener('submit',e=>{e.preventDefault();let a=accounts(),x=a.find(z=>z.login===u.login);x.nickname=f.nickname.value.trim()||x.login;x.avatar=f.dataset.avatar!==undefined?f.dataset.avatar:f.avatar.value.trim();saveAccounts(a);document.getElementById('msg').textContent='Профиль сохранён.';setTimeout(()=>location.reload(),400)})}
-function adminPanel(){const root=document.getElementById('adminPanel');if(!root)return;const u=currentUser();if(!isLeader(u)){root.innerHTML='';return}let a=accounts().filter(x=>x.login.toLowerCase()!=='rostislavangel');root.innerHTML=`<div class="adminBox"><h2>Управление ролями</h2>${a.map(x=>`<div class="userRow"><div><b>${esc(x.nickname||x.login)}</b><small>${esc(x.login)} · ${esc(x.role||'Пользователь')}</small></div><select data-role="${esc(x.login)}"><option value="Пользователь">Пользователь</option>${ROLES.map(r=>`<option ${x.role===r?'selected':''}>${r}</option>`).join('')}</select><button class="btn orange" onclick="setRole('${String(x.login).replace(/'/g,"\\'")}')">Сохранить</button></div>`).join('')}</div>`}
+function passwordChangeForm(){
+  const f=document.getElementById('passwordChangeForm');
+  if(!f)return;
+  f.addEventListener('submit',function(e){
+    e.preventDefault();
+    const msg=document.getElementById('passwordMsg');
+    const next=document.getElementById('newPassword').value;
+    const old=document.getElementById('oldPassword').value;
+    const fail=t=>{if(msg)msg.textContent=t};
+    if(next.length<6)return fail('Новый пароль должен содержать минимум 6 символов.');
+    const u=currentUser();
+    if(!u)return location.href='login.html';
+    const a=accounts();
+    const x=a.find(z=>String(z.login).toLowerCase()===String(u.login).toLowerCase());
+    if(!x)return fail('Аккаунт не найден. Войди заново.');
+    if(String(x.password||'')!==old)return fail('Старый пароль введён неверно.');
+    if(next===old)return fail('Новый пароль должен отличаться от старого.');
+    x.password=next;
+    saveAccounts(a);
+    f.reset();
+    fail('Пароль успешно изменён.');
+  });
+}
+
+function profileForm(){
+ const f=document.getElementById('profileForm');if(!f)return;const u=currentUser();if(!u)return location.href='login.html';
+ f.nickname.value=u.nickname||u.login;f.avatar.value=u.avatar&&u.avatar.startsWith('http')?u.avatar:'';
+ const file=document.getElementById('avatarFile'),coverFile=document.getElementById('coverFile'),preview=document.getElementById('formAvatar'),top=document.getElementById('previewAvatar'),hero=document.getElementById('profileCoverHero');
+ function draw(src){const html=src?`<img src="${esc(src)}">`:initials(f.nickname.value||u.login);preview.innerHTML=html;top.innerHTML=html}
+ function drawCover(src){if(hero){hero.style.backgroundImage=src?`linear-gradient(90deg,rgba(7,13,24,.88),rgba(7,13,24,.48)),url("${src}")`:'';hero.classList.toggle('hasCover',!!src)} }
+ draw(u.avatar||'');drawCover(u.cover||'');
+ file&&file.addEventListener('change',()=>{const blob=file.files&&file.files[0];if(!blob)return;if(blob.size>3*1024*1024){file.value='';return alert('Аватар должен быть меньше 3 МБ.')}const r=new FileReader();r.onload=()=>{f.dataset.avatar=r.result;draw(r.result)};r.readAsDataURL(blob)});
+ coverFile&&coverFile.addEventListener('change',()=>{const blob=coverFile.files&&coverFile.files[0];if(!blob)return;if(blob.size>5*1024*1024){coverFile.value='';return alert('Фон должен быть меньше 5 МБ.')}const r=new FileReader();r.onload=()=>{f.dataset.cover=r.result;drawCover(r.result)};r.readAsDataURL(blob)});
+ document.getElementById('removeAvatar')?.addEventListener('click',()=>{f.dataset.avatar='';f.avatar.value='';if(file)file.value='';draw('')});
+ document.getElementById('removeCover')?.addEventListener('click',()=>{f.dataset.cover='';if(coverFile)coverFile.value='';drawCover('')});
+ f.nickname.addEventListener('input',()=>{document.getElementById('previewName').textContent=f.nickname.value.trim()||u.login;draw(f.dataset.avatar||u.avatar||'')});
+ f.addEventListener('submit',e=>{e.preventDefault();let a=accounts(),x=a.find(z=>z.login===u.login);x.nickname=f.nickname.value.trim()||x.login;x.avatar=f.dataset.avatar!==undefined?f.dataset.avatar:f.avatar.value.trim();x.cover=f.dataset.cover!==undefined?f.dataset.cover:(x.cover||'');saveAccounts(a);document.getElementById('msg').textContent='Профиль сохранён.';setTimeout(()=>location.reload(),400)})
+}
+function adminPanel(){const root=document.getElementById('adminPanel');if(!root)return;const u=currentUser();if(!isLeader(u)){root.innerHTML='';return}let a=accounts().filter(x=>x.login.toLowerCase()!==LEADER_LOGIN.toLowerCase());root.innerHTML=`<div class="adminBox"><h2>Управление ролями</h2>${a.map(x=>`<div class="userRow"><div><b>${esc(x.nickname||x.login)}</b><small>${esc(x.login)} · ${esc(x.role||'Пользователь')}</small></div><select data-role="${esc(x.login)}"><option value="Пользователь">Пользователь</option>${ROLES.map(r=>`<option ${x.role===r?'selected':''}>${r}</option>`).join('')}</select><button class="btn orange" onclick="setRole('${String(x.login).replace(/'/g,"\\'")}')">Сохранить</button></div>`).join('')}</div>`}
 function setRole(login){if(!isLeader())return;const sel=document.querySelector(`[data-role="${CSS.escape(login)}"]`),a=accounts(),u=a.find(x=>x.login===login);if(u&&sel){u.role=sel.value;saveAccounts(a);adminPanel()}}
 function readFile(file,cb,max=4*1024*1024){if(!file)return cb(null);if(file.size>max)return alert('Файл должен быть меньше 4 МБ.');const r=new FileReader();r.onload=()=>cb({name:file.name,type:file.type,data:r.result});r.readAsDataURL(file)}
 function createTopicForm(){
@@ -131,7 +173,7 @@ function createTopicForm(){
     if(!title||!body)return;
     readFile(f.attachment?.files?.[0],attachment=>{
       let t=getTopics();
-      const topic={id:Date.now(),section,topicType:f.dataset.topicType||'',server:(f.dataset.server||new URLSearchParams(location.search).get('server')||'infinity').toLowerCase(),title,body,attachment,author:currentUser().nickname||currentUser().login,login:currentUser().login,replies:[],status:'open',acceptedBy:null,created:new Date().toISOString()};
+      const topic={id:Date.now(),section,topicType:f.dataset.topicType||'',server:(f.dataset.server||new URLSearchParams(location.search).get('server')||'infinity').toLowerCase(),title,body,attachment,author:currentUser().nickname||currentUser().login,login:currentUser().login,authorAvatar:currentUser().avatar||'',replies:[],status:'open',acceptedBy:null,created:new Date().toISOString()};
       t.push(topic);
       if(saveTopics(t))location.href=`topic.html?id=${topic.id}`;
     });
@@ -141,7 +183,7 @@ function acceptTopic(id){const a=getTopics(),t=a.find(x=>x.id==id);if(!t||!admin
 function closeTopic(id){const a=getTopics(),t=a.find(x=>x.id==id);if(!t||!adminCanManageTopic(t))return;if(!t)return;t.status='closed';t.closedBy={login:currentUser().login,nickname:currentUser().nickname||currentUser().login,role:currentUser().role,at:new Date().toISOString()};saveTopics(a);renderTopic()}
 function reopenTopic(id){const a=getTopics(),t=a.find(x=>x.id==id);if(!t||!adminCanManageTopic(t))return;if(!t)return;t.status='open';t.closedBy=null;saveTopics(a);renderTopic()}
 function deleteTopic(id){if(!isLeader())return;const a=getTopics();const t=a.find(x=>x.id==id);if(!t)return;if(!confirm('Удалить эту тему без возможности восстановления?'))return;saveTopics(a.filter(x=>x.id!=id));cloudDeleteTopic(id);renderAdminPanel();}
-function postReply(topicId,body,attachment,source='manual'){const a=getTopics(),t=a.find(x=>x.id==topicId);if(!t||!canReply(t))return false;if(!t||t.status==='closed')return false;t.replies.push({id:Date.now()+Math.random(),author:currentUser().nickname||currentUser().login,login:currentUser().login,role:currentUser().role,body,attachment,source,created:new Date().toISOString()});return saveTopics(a)}
+function postReply(topicId,body,attachment,source='manual'){const a=getTopics(),t=a.find(x=>x.id==topicId);if(!t||!canReply(t))return false;if(!t||t.status==='closed')return false;t.replies.push({id:Date.now()+Math.random(),author:currentUser().nickname||currentUser().login,login:currentUser().login,avatar:currentUser().avatar||'',role:currentUser().role,body,attachment,source,created:new Date().toISOString()});return saveTopics(a)}
 function sendAutoMessage(topicId,text){const t=getTopics().find(x=>x.id==topicId);if(!t||!canReply(t)||!text.trim())return;postReply(topicId,text.trim(),null,'auto');renderTopic()}
 function renderAutoPanel(t){if(!canReply(t))return '';return `<div class="autoPanel"><div class="autoPanelHead"><div><b>Панель быстрых сообщений</b><small>Отправить готовый ответ или написать свой</small></div></div><div class="autoBtns">${AUTO_MESSAGES.map(m=>`<button class="btn autoBtn" onclick="sendAutoMessage(${t.id},'${m.replace(/'/g,"\\'")}')">${esc(m)}</button>`).join('')}</div><div class="autoCustom"><textarea id="autoText" class="input" rows="3" placeholder="Своё сообщение..."></textarea><button class="btn orange" onclick="sendAutoMessage(${t.id},document.getElementById('autoText').value)">Отправить</button></div></div>`}
 function renderAttachment(a){if(!a)return '';if((a.type||'').startsWith('image/'))return `<div class="attachment"><a href="${esc(a.data)}" target="_blank"><img src="${esc(a.data)}" alt="${esc(a.name)}"></a><small>${esc(a.name)}</small></div>`;return `<div class="attachment file"><a href="${esc(a.data)}" download="${esc(a.name)}">📎 ${esc(a.name)}</a></div>`}
@@ -162,7 +204,7 @@ function renderAdminRoles(){
   const root=document.getElementById('adminRoles');if(!root)return;if(!isLeader()){root.innerHTML='';return}
   root.innerHTML=`<div class="adminBox"><h2>Управление ролями</h2><p class="muted">Введите логин пользователя и найдите его.</p><div class="adminSearch"><input id="roleSearch" class="input" placeholder="Логин пользователя"><button class="btn orange" onclick="searchAdminRoleUser()">Найти</button></div><div id="roleSearchResult"></div></div>`;
 }
-function searchAdminRoleUser(){if(!isLeader())return;const root=document.getElementById('roleSearchResult'),u=findAdminUser(document.getElementById('roleSearch')?.value);if(!root)return;if(!u||u.login.toLowerCase()==='rostislavangel'){root.innerHTML='<div class="notice">Пользователь не найден.</div>';return}const has=ROLES.includes(u.role);root.innerHTML=`<div class="adminUserCard"><div><b>${esc(u.nickname||u.login)}</b><small>@${esc(u.login)} · ${esc(u.role||'Пользователь')}</small></div><button class="btn orange" onclick="openRoleModal('${adminEscLogin(u.login)}')">${has?'Забрать роль':'Выдать роль'}</button></div>`}
+function searchAdminRoleUser(){if(!isLeader())return;const root=document.getElementById('roleSearchResult'),u=findAdminUser(document.getElementById('roleSearch')?.value);if(!root)return;if(!u||u.login.toLowerCase()===LEADER_LOGIN.toLowerCase()){root.innerHTML='<div class="notice">Пользователь не найден.</div>';return}const has=ROLES.includes(u.role);root.innerHTML=`<div class="adminUserCard"><div><b>${esc(u.nickname||u.login)}</b><small>@${esc(u.login)} · ${esc(u.role||'Пользователь')}</small></div><button class="btn orange" onclick="openRoleModal('${adminEscLogin(u.login)}')">${has?'Забрать роль':'Выдать роль'}</button></div>`}
 function openRoleModal(login){if(!isLeader())return;const u=accounts().find(x=>x.login===login);if(!u)return;const old=document.getElementById('roleModal');if(old)old.remove();document.body.insertAdjacentHTML('beforeend',`<div class="adminModal" id="roleModal"><div class="adminModalBox"><button class="modalClose" onclick="document.getElementById('roleModal').remove()">×</button><h2>${ROLES.includes(u.role)?'Забрать роль':'Выдать роль'}</h2><p class="muted">${esc(u.nickname||u.login)} · @${esc(u.login)}</p>${ROLES.includes(u.role)?`<button class="btn danger fullBtn" onclick="removeAdminRole('${adminEscLogin(u.login)}');document.getElementById('roleModal').remove()">Забрать роль «${esc(u.role)}»</button>`:ROLES.map(r=>`<button class="btn rolePick" onclick="giveAdminRole('${adminEscLogin(u.login)}','${adminEscLogin(r)}');document.getElementById('roleModal').remove()">${esc(r)}</button>`).join('')}</div></div>`)}
 function giveAdminRole(login,role){if(!isLeader()||!ROLES.includes(role))return;const a=accounts(),u=a.find(x=>x.login===login);if(!u)return;u.role=role;saveAccounts(a);renderAdminRoles();document.getElementById('roleSearch').value=login;searchAdminRoleUser()}
 function removeAdminRole(login){if(!isLeader())return;const a=accounts(),u=a.find(x=>x.login===login);if(!u)return;u.role='Пользователь';saveAccounts(a);renderAdminRoles();document.getElementById('roleSearch').value=login;searchAdminRoleUser()}
@@ -170,7 +212,7 @@ function renderAdminBans(){
   const root=document.getElementById('adminBans');if(!root)return;if(!isLeader()){root.innerHTML='';return}
   root.innerHTML=`<div class="adminBox"><h2>Блокировка форума</h2><p class="muted">Введите логин пользователя и найдите его.</p><div class="adminSearch"><input id="banSearch" class="input" placeholder="Логин пользователя"><button class="btn orange" onclick="searchAdminBanUser()">Найти</button></div><div id="banSearchResult"></div></div>`;
 }
-function searchAdminBanUser(){if(!isLeader())return;const root=document.getElementById('banSearchResult'),u=findAdminUser(document.getElementById('banSearch')?.value);if(!root)return;if(!u||u.login.toLowerCase()==='rostislavangel'){root.innerHTML='<div class="notice">Пользователь не найден.</div>';return}root.innerHTML=`<div class="adminUserCard"><div><b>${esc(u.nickname||u.login)}</b><small>@${esc(u.login)} · ${u.banned?'Доступ заблокирован':'Доступ разрешён'}</small></div><button class="btn ${u.banned?'orange':'danger'}" onclick="${u.banned?`unbanForumUser('${adminEscLogin(u.login)}')`:`banForumUser('${adminEscLogin(u.login)}')`};searchAdminBanUser()">${u.banned?'Разблокировать доступ':'Заблокировать доступ'}</button></div>`}
+function searchAdminBanUser(){if(!isLeader())return;const root=document.getElementById('banSearchResult'),u=findAdminUser(document.getElementById('banSearch')?.value);if(!root)return;if(!u||u.login.toLowerCase()===LEADER_LOGIN.toLowerCase()){root.innerHTML='<div class="notice">Пользователь не найден.</div>';return}root.innerHTML=`<div class="adminUserCard"><div><b>${esc(u.nickname||u.login)}</b><small>@${esc(u.login)} · ${u.banned?'Доступ заблокирован':'Доступ разрешён'}</small></div><button class="btn ${u.banned?'orange':'danger'}" onclick="${u.banned?`unbanForumUser('${adminEscLogin(u.login)}')`:`banForumUser('${adminEscLogin(u.login)}')`};searchAdminBanUser()">${u.banned?'Разблокировать доступ':'Заблокировать доступ'}</button></div>`}
 function banForumUser(login){if(!isLeader())return;const a=accounts(),u=a.find(x=>x.login===login);if(!u)return;if(!confirm('Заблокировать '+(u.nickname||u.login)+' на форуме?'))return;u.banned=true;saveAccounts(a)}
 function unbanForumUser(login){if(!isLeader())return;const a=accounts(),u=a.find(x=>x.login===login);if(!u)return;u.banned=false;saveAccounts(a)}
 function adminTab(name){if(!isLeader())return;document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===name));const map={topics:'adminTopics',roles:'adminRoles',bans:'adminBans'};Object.keys(map).forEach(k=>{const el=document.getElementById(map[k]);if(el)el.style.display=k===name?'block':'none'})}
@@ -178,7 +220,19 @@ function renderAdminPanel(){renderAdminTopics();renderAdminRoles();renderAdminBa
 function acceptTopicFromAdmin(id){acceptTopic(id);renderAdminPanel()}
 function closeTopicFromAdmin(id){closeTopic(id);renderAdminPanel()}
 function reopenTopicFromAdmin(id){reopenTopic(id);renderAdminPanel()}
-function renderTopic(){const root=document.getElementById('topicView');if(!root)return;const id=new URLSearchParams(location.search).get('id'),t=getTopics().find(x=>String(x.id)===String(id));if(!t)return root.innerHTML='<div class="notice">Тема не найдена.</div>';const status=t.status==='closed'?'<span class="topicStatus closed">Закрыта</span>':t.status==='accepted'?'<span class="topicStatus accepted">Принята</span>':'<span class="topicStatus open">Открыта</span>';const accepted=t.acceptedBy?`<div class="acceptedInfo">✓ Тему принял <b>${esc(t.acceptedBy.nickname)}</b> · ${esc(t.acceptedBy.role)}</div>`:'';const controls=adminCanManageTopic(t)?`<div class="topicControls">${t.status==='closed'?`<button class="btn" onclick="reopenTopic(${t.id})">Открыть тему</button>`:`<button class="btn orange" onclick="acceptTopic(${t.id})">✓ Принять тему</button><button class="btn" onclick="closeTopic(${t.id})">Закрыть тему</button>`}</div>`:'';const posts=t.replies.map(r=>`<div class="post reply"><div class="postAuthor"><b>${esc(r.author)}</b><span>${esc(r.role||'Пользователь')}</span></div><p>${esc(r.body).replace(/\n/g,'<br>')}</p>${renderAttachment(r.attachment)}</div>`).join('');root.innerHTML=`<div class="topicToolbar"><a href="javascript:history.back()">← Назад</a>${status}</div><article class="topicCard"><div class="topicMeta"><span class="topicKind ${t.topicType&&['amnesty','leader','moderator'].includes(t.topicType)?'application':'complaint'}">${t.topicType&&['amnesty','leader','moderator'].includes(t.topicType)?'Заявление':t.topicType?'Жалоба':'Обращение'}</span> · ${new Date(t.created).toLocaleString('ru-RU')}</div><div class="topicTitleRow"><h1>${esc(t.title)}</h1>${controls}</div>${accepted}<div class="post firstPost"><div class="postAuthor"><b>${esc(t.author)}</b><span>Автор темы</span></div><p>${esc(t.body).replace(/\n/g,'<br>')}</p>${renderAttachment(t.attachment)}</div>${posts}</article>${renderAutoPanel(t)}${canReply(t)&&t.status!=='closed'?`<form id="replyForm" class="form wide"><h3>Ответить</h3><textarea class="input" name="body" rows="5" placeholder="Ваш ответ"></textarea><label class="fileBtn attachLabel">📎 Прикрепить файл<input type="file" id="replyFile" accept="image/*,.pdf,.txt,.doc,.docx"></label><div id="replyFileName" class="fileName"></div><button class="btn orange">Ответить</button></form>`:(t.status==='closed'?'<div class="notice">Тема закрыта. Новые сообщения недоступны.</div>':'<div class="notice">Отвечать в темах могут только форумные администраторы и Руководитель Проекта.</div>')}`;const rf=document.getElementById('replyForm');if(rf)rf.addEventListener('submit',e=>{e.preventDefault();const body=rf.body.value.trim();if(!body)return;readFile(document.getElementById('replyFile')?.files?.[0],a=>{if(postReply(t.id,body,a))renderTopic()})});document.getElementById('replyFile')?.addEventListener('change',e=>{document.getElementById('replyFileName').textContent=e.target.files[0]?.name||''})}
+function renderTopic(){
+ const root=document.getElementById('topicView');if(!root)return;
+ const id=new URLSearchParams(location.search).get('id'),t=getTopics().find(x=>String(x.id)===String(id));
+ if(!t)return root.innerHTML='<div class="notice">Тема не найдена.</div>';
+ const status=t.status==='closed'?'<span class="topicStatus closed">Закрыта</span>':t.status==='accepted'?'<span class="topicStatus accepted">Принята</span>':'<span class="topicStatus open">Открыта</span>';
+ const accepted=t.acceptedBy?`<div class="acceptedInfo">✓ Тему принял <b>${esc(t.acceptedBy.nickname)}</b> · ${esc(t.acceptedBy.role)}</div>`:'';
+ const controls=adminCanManageTopic(t)?`<div class="topicControls">${t.status==='closed'?`<button class="btn" onclick="reopenTopic(${t.id})">Открыть тему</button>`:`<button class="btn orange" onclick="acceptTopic(${t.id})">✓ Принять тему</button><button class="btn" onclick="closeTopic(${t.id})">Закрыть тему</button>`}</div>`:'';
+ const posts=t.replies.map(r=>`<div class="post reply"><div class="postAuthor">${avatarMarkup(r.login,r.author,r.avatar)}<div class="postAuthorText"><b>${esc(r.author)}</b><span>${esc(r.role||'Пользователь')}</span></div></div><p>${esc(r.body).replace(/\n/g,'<br>')}</p>${renderAttachment(r.attachment)}</div>`).join('');
+ root.innerHTML=`<div class="topicToolbar"><a href="javascript:history.back()">← Назад</a>${status}</div><article class="topicCard"><div class="topicMeta"><span class="topicKind ${t.topicType&&['amnesty','leader','moderator'].includes(t.topicType)?'application':'complaint'}">${t.topicType&&['amnesty','leader','moderator'].includes(t.topicType)?'Заявление':t.topicType?'Жалоба':'Обращение'}</span> · ${new Date(t.created).toLocaleString('ru-RU')}</div><div class="topicTitleRow"><h1>${esc(t.title)}</h1>${controls}</div>${accepted}<div class="post firstPost"><div class="postAuthor">${avatarMarkup(t.login,t.author,t.authorAvatar)}<div class="postAuthorText"><b>${esc(t.author)}</b><span>Автор темы</span></div></div><p>${esc(t.body).replace(/\n/g,'<br>')}</p>${renderAttachment(t.attachment)}</div>${posts}</article>${renderAutoPanel(t)}${canReply(t)&&t.status!=='closed'?`<form id="replyForm" class="form wide"><h3>Ответить</h3><textarea class="input" name="body" rows="5" placeholder="Ваш ответ"></textarea><label class="fileBtn attachLabel">📎 Прикрепить файл<input type="file" id="replyFile" accept="image/*,.pdf,.txt,.doc,.docx"></label><div id="replyFileName" class="fileName"></div><button class="btn orange">Ответить</button></form>`:(t.status==='closed'?'<div class="notice">Тема закрыта. Новые сообщения недоступны.</div>':'<div class="notice">Отвечать в темах могут только форумные администраторы и Руководитель Проекта.</div>')}`;
+ const rf=document.getElementById('replyForm');if(rf)rf.addEventListener('submit',e=>{e.preventDefault();const body=rf.body.value.trim();if(!body)return;readFile(document.getElementById('replyFile')?.files?.[0],a=>{if(postReply(t.id,body,a)){renderTopic()}})});
+ document.getElementById('replyFile')?.addEventListener('change',e=>{document.getElementById('replyFileName').textContent=e.target.files[0]?.name||''});
+}
+
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function renderTopicList(){
   document.querySelectorAll('[data-topic-list]').forEach(function(root){
@@ -203,6 +257,26 @@ function renderTopicList(){
     }).join('');
   });
 }
-document.addEventListener('DOMContentLoaded',()=>{ensureLeader();updateHeader();registerForm();loginForm();profileForm();adminPanel();createTopicForm();renderTopic();renderTopicList();renderAdminPanel();if(document.getElementById('adminTopics')&&isLeader())adminTab('topics');initRealtime()});
+const ANIMATION_KEY='fantomrp_animations_on';
+function animationsOn(){return localStorage.getItem(ANIMATION_KEY)!=='off'}
+function applyAnimationPreference(){
+  document.body.classList.toggle('animations-off',!animationsOn());
+  document.documentElement.classList.toggle('animations-off',!animationsOn());
+}
+function initAppearanceSettings(){
+ const animation=document.getElementById('animationPreference');
+ if(animation){
+   animation.checked=animationsOn();
+   animation.addEventListener('change',()=>{
+     localStorage.setItem(ANIMATION_KEY,animation.checked?'on':'off');
+     applyAnimationPreference();
+     const msg=document.getElementById('preferencesMsg');
+     if(msg)msg.textContent=animation.checked?'Анимации включены.':'Анимации выключены.';
+   });
+ }
+ applyAnimationPreference();
+}
+
+document.addEventListener('DOMContentLoaded',()=>{ensureLeader();initAppearanceSettings();updateHeader();registerForm();loginForm();profileForm();adminPanel();createTopicForm();renderTopic();renderTopicList();renderAdminPanel();if(document.getElementById('adminTopics')&&isLeader())adminTab('topics');initRealtime()});
 
 window.addEventListener("error",e=>console.error("FantomRP error:",e.error||e.message));
