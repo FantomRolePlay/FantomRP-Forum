@@ -1,0 +1,11 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Создать тему — FantomRP</title><link rel="stylesheet" href="../assets/css/style.css"></head><body><header><div class="wrap nav"><a class="brand" href="../index.html"><span class="logo">F</span><div><b>FantomRP</b><small>ROLEPLAY PROJECT</small></div></a><nav class="links"><a href="../index.html">Главная</a><span class="navDisabled">Правила <small>СКОРО</small></span><a href="support.html">Поддержка</a><span class="navDisabled">Законка <small>СКОРО</small></span></nav><div class="auth"></div></div></header><main class="wrap"><form id="topicForm" class="form wide" data-section="support"><div id="topicTypeBadge" class="topicTypeBadge"></div><h2 id="createTitle">Новая тема</h2><input class="input" name="title" placeholder="Заголовок темы"><textarea class="input" name="body" rows="9" placeholder="Текст темы"></textarea><label class="fileBtn attachLabel">📎 Прикрепить скриншот или файл<input type="file" name="attachment" accept="image/*,.pdf,.txt,.doc,.docx"></label><div class="fileHint">Можно прикрепить скриншот или файл до 4 МБ.</div><button class="btn orange">Создать тему</button></form></main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="../assets/js/auth.js"></script><script>document.addEventListener("DOMContentLoaded",()=>{
+const f=document.getElementById("topicForm");
+const type=new URLSearchParams(location.search).get("type")||"";
+const map={players:"Жалоба на игрока",leaders:"Жалоба на лидера",admins:"Жалоба на администрацию",amnesty:"Заявление на амнистию",leader:"Заявление на пост лидера",moderator:"Заявление на пост модератора"};
+if(type){
+  const badge=document.getElementById("topicTypeBadge");
+  const title=document.getElementById("createTitle");
+  if(badge) badge.textContent=map[type]||"Жалоба / заявление";
+  if(title) title.textContent=map[type]||"Жалоба / заявление";
+}
+})</script></body></html>
